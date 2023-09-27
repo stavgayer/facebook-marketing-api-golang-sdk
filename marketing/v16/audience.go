@@ -1,4 +1,4 @@
-package v14
+package v16
 
 import (
 	"context"
@@ -41,6 +41,34 @@ func (as *AudienceService) Create(ctx context.Context, act string, a CustomAudie
 	return res.ID, nil
 }
 
+// CreateLookalike creates new lookalike
+func (as *AudienceService) CreateLookalike(ctx context.Context, adaccountID, orginAudienceID, customAudienceName string, lookalikeSpec *LookalikeSpec) (string, error) {
+
+	type createLookalikeRequest struct {
+		OriginAudienceID string         `json:"origin_audience_id"`
+		Name             string         `json:"name"`
+		Subtype          string         `json:"subtype"`
+		LookalikeSpec    *LookalikeSpec `json:"lookalike_spec"`
+	}
+
+	res := &fb.MinimalResponse{}
+	err := as.c.PostJSON(ctx, fb.NewRoute(Version, "/act_%s/customaudiences", adaccountID).String(), createLookalikeRequest{
+		OriginAudienceID: orginAudienceID,
+		Name:             customAudienceName,
+		Subtype:          "LOOKALIKE",
+		LookalikeSpec:    lookalikeSpec,
+	}, &res)
+	if err != nil {
+		return "", err
+	} else if err = res.GetError(); err != nil {
+		return "", err
+	} else if res.ID == "" {
+		return "", fmt.Errorf("creating lookalike audience failed")
+	}
+
+	return res.ID, nil
+}
+
 // Update updates an audience.
 func (as *AudienceService) Update(ctx context.Context, a CustomAudience) error {
 	if a.ID == "" {
@@ -54,7 +82,7 @@ func (as *AudienceService) Update(ctx context.Context, a CustomAudience) error {
 	} else if err = res.GetError(); err != nil {
 		return err
 	} else if !res.Success && res.ID == "" {
-		return fmt.Errorf("updating failed")
+		return fmt.Errorf("updating the audience failed")
 	}
 
 	return nil
@@ -114,6 +142,18 @@ func (as *AudienceService) ShareCustom(ctx context.Context, customAudienceID str
 	}
 
 	return as.c.PostJSON(ctx, fb.NewRoute(Version, "/%s/adaccounts", customAudienceID).String(), struct {
+		Adaccounts       []string `json:"adaccounts"`
+		RelationshipType []string `json:"relationship_type"`
+	}{adaccountIDs, relationshipTypes}, &struct{}{})
+}
+
+// UnshareCustom unshares a custom audience with the provided adaccounts.
+func (as *AudienceService) UnshareCustom(ctx context.Context, customAudienceID string, adaccountIDs, relationshipTypes []string) error {
+	if len(adaccountIDs) == 0 {
+		return nil
+	}
+
+	return as.c.DeleteJSON(ctx, fb.NewRoute(Version, "/%s/adaccounts", customAudienceID).String(), struct {
 		Adaccounts       []string `json:"adaccounts"`
 		RelationshipType []string `json:"relationship_type"`
 	}{adaccountIDs, relationshipTypes}, &struct{}{})
@@ -346,10 +386,10 @@ type CustomAudience struct {
 
 // LookalikeSpec contains the metadata of lookalike audiences.
 type LookalikeSpec struct {
-	// Country      string             `json:"country,omitempty"`
-	Origin []LookalikeOrigion `json:"origin,omitempty"`
-	Ratio  float64            `json:"ratio,omitempty"`
-	Type   string             `json:"type,omitempty"`
+	Country string             `json:"country,omitempty"`
+	Origin  []LookalikeOrigion `json:"origin,omitempty"`
+	Ratio   float64            `json:"ratio,omitempty"`
+	Type    string             `json:"type,omitempty"`
 }
 
 // LocationSpec ...
